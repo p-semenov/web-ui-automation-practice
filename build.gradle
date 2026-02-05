@@ -8,13 +8,13 @@ version = '1.0-SNAPSHOT'
 
 allure{
     report{
-        version.set("2.19.0")
+        version.set("2.32.0")
     }
     adapter{
         aspectjWeaver.set(true)
         frameworks{
             junit5{
-                adapterVersion.set("2.19.0")
+                adapterVersion.set("2.32.0")
             }
         }
     }
@@ -27,13 +27,28 @@ repositories {
 dependencies {
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter',
-                        'com.codeborne:selenide:7.13.0',
-                         "org.assertj:assertj-core:3.27.6",
-                        'io.qameta.allure:allure-junit5:2.32.0',
-                        'io.qameta.allure:allure-selenide:2.32.0'
+            'com.codeborne:selenide:7.13.0',
+            'org.assertj:assertj-core:3.27.6',
+            'io.qameta.allure:allure-junit5:2.32.0',
+            'io.qameta.allure:allure-selenide:2.32.0',
+            'org.aspectj:aspectjweaver:1.9.20'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 test {
     useJUnitPlatform()
+
+    systemProperties = [
+            'selenide.headless': 'true',
+            'selenide.browser': 'chrome',
+            'selenide.timeout': '10000',
+            'allure.results.directory': 'build/allure-results'
+    ]
+
+    testLogging {
+        events = ["passed", "failed", "skipped"]
+        showStandardStreams = true
+    }
+
 }
+

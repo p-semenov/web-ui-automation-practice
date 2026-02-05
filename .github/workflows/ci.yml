@@ -1,64 +1,107 @@
-name: Publish Allure Report  # Название workflow (видно в интерфейсе GitHub)
 
-# КОГДА ЗАПУСКАТЬ: при пуше в main или при создании Pull Request в main
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  workflow_dispatch:  # Позволяет запустить вручную из вкладки "Actions"
+  name: Publish Allure Report
 
-# ДАЁМ НУЖНЫЕ ПРАВА (это важно для публикации)
-permissions:
-  contents: write
-  pages: write
-  id-token: write
+  on:
+    push:
+      branches: [ "main" ]
+    pull_request:
+      branches: [ "main" ]
+    workflow_dispatch:
 
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest  # Запускаем на последней версии Ubuntu
+  permissions:
+    contents: write
+    pages: write
+    id-token: write
 
-    steps:
-      # 1. КЛОНИРУЕМ ВАШ КОД
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  jobs:
+    build-and-deploy:
+      runs-on: ubuntu-latest
 
-      # 2. УСТАНАВЛИВАЕМ JAVA (версия должна совпадать с вашей в build.gradle)
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+      # Убедимся, что у нас есть переменные окружения
+      env:
+        GRADLE_OPTS: "-Dorg.gradle.daemon=false"
 
-      # 3. ДАЁМ ПРАВА НА ВЫПОЛНЕНИЕ GRADLE-СКРИПТА (требуется для Linux)
-      - name: Make gradlew executable
-        run: chmod +x gradlew
+      steps:
+        # 1. Клонируем код
+        - name: Checkout repository
+          uses: actions/checkout@v4
+          with:
+            fetch-depth: 0  # Получаем всю историю для Allure history
 
-      # 4. ЗАПУСКАЕМ ТЕСТЫ! (ключевой шаг)
-      #    Все результаты (логи, скриншоты) попадут в build/allure-results
-      - name: Run tests with Gradle
-        run: ./gradlew test
-        continue-on-error: true  # Даже если тесты упали, продолжаем, чтобы увидеть отчёт
+        # 2. Устанавливаем Java
+        - name: Set up JDK 17
+          uses: actions/setup-java@v4
+          with:
+            java-version: '17'
+            distribution: 'temurin'
 
-      # 5. ГЕНЕРИРУЕМ ALLURE-ОТЧЁТ
-      - name: Generate Allure Report
-        run: |
-          # Устанавливаем утилиту Allure Commandline
-          curl -Lo allure-2.27.0.tgz https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
-          tar -zxvf allure-2.27.0.tgz -C /opt/
-          ln -s /opt/allure-2.27.0/bin/allure /usr/bin/allure
-          # Превращаем сырые данные в красивый HTML-отчёт
-          allure generate build/allure-results -o _site --clean
+        # 3. Даём права на выполнение gradlew
+        - name: Make gradlew executable
+          run: chmod +x gradlew
 
-      # 6. ПУБЛИКУЕМ ОТЧЁТ НА GITHUB PAGES
-      - name: Setup GitHub Pages
-        uses: actions/configure-pages@v4
+        # 4. Запускаем тесты
+        - name: Run tests with Gradle
+          run: ./gradlew clean test
+          continue-on-error: true  # Продолжаем даже если тесты упали
 
-      - name: Upload report to Pages
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '_site'  # Загружаем на хостинг содержимое папки с отчётом
+        # 5. УСТАНАВЛИВАЕМ ALLURE БЕЗ СИМЛИНКОВ В /usr/bin
+        - name: Setup Allure
+          run: |
+            # Скачиваем Allure без установки в системные папки
+            wget -q -O allure-2.27.0.tgz https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
+            tar -xzf allure-2.27.0.tgz -C /opt/
+            # Добавляем в PATH без создания симлинков
+            echo "/opt/allure-2.27.0/bin" >> $GITHUB_PATH
+            # Проверяем установку
+            which allure || echo "Allure not in PATH"
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+        # 6. Проверяем, что результаты тестов существуют
+        - name: Check Allure results exist
+          run: |
+            if [ -d "build/allure-results" ]; then
+              echo "Allure results found:"
+              ls -la build/allure-results/ | head -10
+              echo "Total files: $(find build/allure-results -name "*.json" | wc -l)"
+            else
+              echo "WARNING: No allure-results folder found!"
+              echo "Current build directory contents:"
+              find build -type f -name "*.json" 2>/dev/null || echo "No JSON files found"
+            fi
+
+        # 7. Генерируем Allure отчет
+        - name: Generate Allure Report
+          run: |
+            # Создаем папку для отчета
+            mkdir -p _site
+            
+            # Если есть результаты - генерируем отчет
+            if [ -d "build/allure-results" ] && [ $(find build/allure-results -name "*.json" 2>/dev/null | wc -l) -gt 0 ]; then
+              echo "Generating Allure report..."
+              allure generate build/allure-results -o _site --clean
+              echo "Report generated successfully"
+            else
+              echo "No Allure results found, creating empty report"
+              echo '<!DOCTYPE html><html><head><title>Allure Report</title></head><body><h1>No test results available</h1><p>Run tests to see the report here.</p></body></html>' > _site/index.html
+            fi
+
+        # 8. Настраиваем GitHub Pages
+        - name: Setup GitHub Pages
+          uses: actions/configure-pages@v4
+
+        # 9. Загружаем отчет как артефакт (для отладки)
+        - name: Upload report artifact for debugging
+          uses: actions/upload-artifact@v4
+          with:
+            name: allure-report-debug
+            path: _site
+            retention-days: 7
+
+        # 10. Публикуем отчет на GitHub Pages
+        - name: Upload report to Pages
+          uses: actions/upload-pages-artifact@v3
+          with:
+            path: '_site'
+
+        - name: Deploy to GitHub Pages
+          id: deployment
+          uses: actions/deploy-pages@v4

@@ -37,148 +37,61 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      # 1. Пробуем запустить тесты если они есть
-      - name: Try to run tests
+      - name: Run tests if available
         run: |
-          echo "=== Checking for test files ==="
           if [ -d "src/test" ] && [ $(find src/test -name "*.java" | wc -l) -gt 0 ]; then
-            echo "Found test files, running tests..."
             ./gradlew clean test --rerun-tasks || true
           else
-            echo "No test files found, skipping test execution"
+            echo "No test files found"
             mkdir -p build/allure-results
           fi
         continue-on-error: true
 
-      # 2. Устанавливаем Allure
       - name: Install Allure
         run: |
           wget -q https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
           tar -xzf allure-2.27.0.tgz
           sudo mv allure-2.27.0 /opt/
           sudo ln -sf /opt/allure-2.27.0/bin/allure /usr/local/bin/allure
-          echo "Allure $(allure --version) installed"
 
-      # 3. Создаем отчет
-      - name: Generate Allure report
+      - name: Generate report
         run: |
           mkdir -p _site
           
-          # Проверяем есть ли результаты
           if [ -d "build/allure-results" ] && [ $(find build/allure-results -name "*.json" | wc -l) -gt 0 ]; then
-            echo "Generating report from test results..."
             allure generate build/allure-results -o _site --clean
           else
-            echo "Creating demo report..."
-            # Создаем красивый демо-отчет
-            cat > _site/index.html << 'EOF'
-            <!DOCTYPE html>
+            echo '<!DOCTYPE html>
             <html>
             <head>
-                <title>Allure Report - Web UI Automation Practice</title>
-                <meta charset="utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-                <style>
-                    body {
-                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-                        margin: 0;
-                        padding: 40px;
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        color: white;
-                        min-height: 100vh;
-                    }
-                    .container {
-                        max-width: 800px;
-                        margin: 0 auto;
-                        background: rgba(255, 255, 255, 0.1);
-                        backdrop-filter: blur(10px);
-                        padding: 40px;
-                        border-radius: 20px;
-                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-                    }
-                    h1 {
-                        font-size: 2.5em;
-                        margin-bottom: 20px;
-                        color: white;
-                    }
-                    .status {
-                        display: inline-block;
-                        padding: 8px 16px;
-                        background: #28a745;
-                        border-radius: 20px;
-                        font-weight: bold;
-                        margin-bottom: 30px;
-                    }
-                    .card {
-                        background: rgba(255, 255, 255, 0.15);
-                        padding: 20px;
-                        border-radius: 10px;
-                        margin-bottom: 20px;
-                    }
-                    code {
-                        background: rgba(0,0,0,0.2);
-                        padding: 4px 8px;
-                        border-radius: 4px;
-                        font-family: monospace;
-                    }
-                </style>
+              <title>Allure Report</title>
+              <style>
+                body { font-family: Arial, sans-serif; margin: 40px; }
+                .container { max-width: 800px; margin: 0 auto; }
+                .success { color: green; font-weight: bold; }
+              </style>
             </head>
             <body>
-                <div class="container">
-                    <h1>🚀 Allure Report</h1>
-                    <div class="status">SETUP COMPLETE</div>
-          
-                    <div class="card">
-                        <h2>📊 Web UI Automation Practice</h2>
-                        <p>Your Allure reporting pipeline is ready!</p>
-                    </div>
-          
-                    <div class="card">
-                        <h3>✅ What's Working:</h3>
-                        <ul>
-                            <li>GitHub Actions workflow</li>
-                            <li>Allure report generation</li>
-                            <li>GitHub Pages deployment</li>
-                            <li>Selenide + Java setup</li>
-                        </ul>
-                    </div>
-          
-                    <div class="card">
-                        <h3>📝 Next Steps:</h3>
-                        <ol>
-                            <li>Add test files to <code>src/test/java/</code></li>
-                            <li>Run tests locally: <code>./gradlew test</code></li>
-                            <li>Check in changes to trigger new report</li>
-                        </ol>
-                    </div>
-          
-                    <div class="card">
-                        <h3>🔗 Useful Links:</h3>
-                        <p><a href="https://github.com/p-semenov/web-ui-automation-practice" style="color: #ffd700;">Repository</a> | 
-                        <a href="https://github.com/p-semenov/web-ui-automation-practice/actions" style="color: #ffd700;">Actions</a></p>
-                    </div>
-                </div>
+              <div class="container">
+                <h1>✅ Allure Report Setup Complete</h1>
+                <p class="success">Web UI Automation Practice</p>
+                <p>GitHub Actions workflow is working correctly.</p>
+                <p>Add test files to see detailed reports here.</p>
+              </div>
             </body>
-            </html>
-            EOF
+            </html>' > _site/index.html
           fi
           
-          echo "Report ready at _site/"
+          echo "Report created at _site/"
           ls -la _site/
 
-      # 4. Настраиваем GitHub Pages
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v4
 
-      # ⚠️ ВАЖНО: Только ОДИН шаг upload-pages-artifact!
-      # Уберите все другие upload-artifact шаги
-      - name: Upload report to GitHub Pages
+      - name: Upload to GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: '_site'
-          # Можно указать другое имя если нужно, но лучше оставить по умолчанию
-          # name: pages-artifact
 
-      # 5. Деплоим
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v4

@@ -15,13 +15,18 @@ public class LoginPagePO extends BaseTest {
         return this;
     }
 
-    public LoginPagePO login(String username, String password) {
+    public LoginPagePO loginUser(String username) {
         $("#username").setValue(username);
+        return this;
+    }
+    public LoginPagePO loginPassword(String password) {
         $("#password").setValue(password);
+        return this;
+    }
+    public LoginPagePO submitBtn() {
         $("#submit").click();
         return this;
     }
-
 
     public LoginPagePO successPageShouldBeOpened(String path) {
         assertThat(url())
